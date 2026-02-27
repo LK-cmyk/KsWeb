@@ -1,0 +1,10 @@
+/* 隐藏滚动条但保留滚动功能 */
+body {
+  scrollbar-width: 0px; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+/* Webkit浏览器（Chrome/Safari） */
+body::-webkit-scrollbar {
+  display: none;
+}

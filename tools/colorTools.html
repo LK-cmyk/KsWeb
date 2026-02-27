@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>颜色工具</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../static/css/colorTools.css"> <!-- 修改后的CSS文件 -->
+</head>
+<body>
+    <div class="background">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-palette"></i> 拾色器</h1>
+            <p class="subtitle">by.K_Lan</p>
+        </header>
+        
+        <div class="color-picker">
+            <div class="color-display">
+                <div class="color-result" id="colorResult"></div>
+                
+                <div class="color-values">
+                    <div class="value-group">
+                        <label><i class="fas fa-hashtag"></i> 十六进制</label>
+                        <input type="text" id="hexInput" value="#6c63ff" maxlength="7">
+                    </div>
+                    
+                    <div class="value-group">
+                        <label><i class="fas fa-sliders-h"></i> RGB值</label>
+                        <input type="text" id="rgbInput" value="rgb(108, 99, 255)">
+                    </div>
+                    
+                    <div class="value-group">
+                        <label><i class="fas fa-circle"></i> HSL值</label>
+                        <input type="text" id="hslInput" value="hsl(244, 100%, 69%)">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="color-controls">
+                <div class="sv-picker" id="svPicker">
+                    <div class="selector" id="svSelector"></div>
+                </div>
+                
+                <div class="hue-slider" id="hueSlider">
+                    <div class="slider-handle" id="hueHandle"></div>
+                </div>
+                
+                <div class="preset-colors">
+                    <h3>预设颜色</h3>
+                    <div class="preset-grid" id="presetGrid"></div>
+                </div>
+                
+                <div class="actions">
+                    <button class="apply-btn" id="applyBtn">
+                        <i class="fas fa-check"></i> 应用颜色
+                    </button>
+                    <button class="reset-btn" id="resetBtn">
+                        <i class="fas fa-redo"></i> 重置
+                    </button>
+                    <button class="copy-btn" id="copyBtn">
+                        <i class="fas fa-copy"></i> 复制
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>提示：在颜色区域拖动选择饱和度和亮度，在色相条上拖动选择色相</p>
+        </div>
+    </div>
+
+    <script>
+        // 全局颜色状态
+        let currentColor = {
+            h: 0, // 色相 (0-360)
+            s: 0, // 饱和度 (0-100)
+            v: 0, // 亮度 (0-100)
+            hex: "#000000",
+            rgb: { r: 0, g: 0, b: 0 },
+            hsl: { h: 0, s: 0, l: 0 }
+        };
+
+        // 预设颜色
+        const presetColors = [
+            "#FF5252", "#FF4081", "#E040FB", "#7C4DFF", "#536DFE",
+            "#448AFF", "#40C4FF", "#18FFFF", "#64FFDA", "#69F0AE",
+            "#B2FF59", "#EEFF41", "#FFFF00", "#FFD740", "#FFAB40",
+            "#FF6E40", "#FF3D00", "#795548", "#9E9E9E", "#607D8B",
+            "#000000", "#FFFFFF", "#6c63ff", "#4CAF50", "#2196F3"
+        ];
+
+        // 缓存DOM元素
+        const dom = {};
+        let isDragging = false;
+        let dragType = null; // 'hue' 或 'sv'
+        let svCanvasCtx = null;
+
+        // 初始化 - 使用DOMContentLoaded确保DOM已加载
+        document.addEventListener('DOMContentLoaded', init);
+
+        function init() {
+            cacheDOMElements();
+            createSVPickerCanvas();
+            initPresetColors();
+            bindEvents();
+            updateUIFromColor();
+        }
+
+        // 缓存DOM元素引用，避免重复查询
+        function cacheDOMElements() {
+            const ids = ['colorResult', 'hexInput', 'rgbInput', 'hslInput', 'svPicker', 'svSelector', 'hueSlider', 'hueHandle', 'presetGrid', 'applyBtn', 'resetBtn', 'copyBtn'];
+            ids.forEach(id => dom[id] = document.getElementById(id));
+        }
+
+        // 创建SV选择器的Canvas上下文（只创建一次）
+        function createSVPickerCanvas() {
+            const canvas = document.createElement('canvas');
+            svCanvasCtx = canvas.getContext('2d');
+            dom.svPicker.insertBefore(canvas, dom.svSelector); // 将canvas放在选择器下面
+            updateCanvasSize();
+            renderSVPicker(); // 初始渲染
+        }
+
+        // 更新Canvas尺寸（仅在resize时调用）
+        function updateCanvasSize() {
+            const canvas = svCanvasCtx.canvas;
+            const rect = dom.svPicker.getBoundingClientRect();
+            // 仅当尺寸实际变化时更新，避免不必要的重绘
+            if (canvas.width !== rect.width || canvas.height !== rect.height) {
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+                return true; // 尺寸已改变，需要重绘
+            }
+            return false;
+        }
+
+        // **优化核心：改进的SV选择器渲染**
+        // 使用CSS水平渐变模拟饱和度，Canvas垂直渐变模拟亮度，性能远优于逐像素绘制。
+        function renderSVPicker() {
+            const width = dom.svPicker.clientWidth;
+            const height = dom.svPicker.clientHeight;
+            const ctx = svCanvasCtx;
+
+            // 1. 清除画布
+            ctx.clearRect(0, 0, width, height);
+
+            // 2. 创建饱和度的水平渐变（从白色到纯色）
+            const hueColor = `hsl(${currentColor.h}, 100%, 50%)`;
+            const saturationGradient = ctx.createLinearGradient(0, 0, width, 0);
+            saturationGradient.addColorStop(0, '#FFFFFF');
+            saturationGradient.addColorStop(1, hueColor);
+
+            // 3. 创建亮度的垂直渐变（从透明到黑色），叠加在上面
+            const brightnessGradient = ctx.createLinearGradient(0, 0, 0, height);
+            brightnessGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            brightnessGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+            // 4. 先填充饱和度渐变
+            ctx.fillStyle = saturationGradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 5. 再叠加亮度渐变
+            ctx.fillStyle = brightnessGradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 6. 更新选择器位置
+            positionSVSelector();
+        }
+
+        // 初始化预设颜色 - 使用事件委托提高效率
+        function initPresetColors() {
+            const fragment = document.createDocumentFragment(); // 使用文档片段减少回流
+            presetColors.forEach(color => {
+                const colorElement = document.createElement('div');
+                colorElement.className = 'preset-color';
+                colorElement.style.backgroundColor = color;
+                colorElement.dataset.color = color;
+                fragment.appendChild(colorElement);
+            });
+            dom.presetGrid.appendChild(fragment);
+
+            // 单个事件监听器处理所有预设颜色点击（事件委托）
+            dom.presetGrid.addEventListener('click', function (e) {
+                if (e.target.classList.contains('preset-color')) {
+                    // 移除之前激活的颜色
+                    const active = this.querySelector('.preset-color.active');
+                    if (active) active.classList.remove('active');
+                    // 激活当前点击的颜色
+                    e.target.classList.add('active');
+                    // 设置颜色
+                    setColorFromHex(e.target.dataset.color);
+                }
+            });
+        }
+
+        // 绑定事件（优化后的拖动逻辑）
+        function bindEvents() {
+            // 按钮事件
+            dom.applyBtn.addEventListener('click', applyColor);
+            dom.resetBtn.addEventListener('click', resetColor);
+            dom.copyBtn.addEventListener('click', copyColor);
+
+            // 输入框事件（使用input和change组合，兼顾响应性与最终验证）
+            dom.hexInput.addEventListener('change', handleHexInput); // 更推荐在失去焦点或回车时验证
+            dom.hexInput.addEventListener('blur', handleHexInput);
+            dom.rgbInput.addEventListener('change', handleRgbInput);
+            dom.hslInput.addEventListener('change', handleHslInput);
+
+            // 鼠标/触摸拖动事件 - 使用更高效的事件绑定
+            dom.svPicker.addEventListener('mousedown', (e) => startDrag(e, 'sv'));
+            dom.hueSlider.addEventListener('mousedown', (e) => startDrag(e, 'hue'));
+
+            // 触摸事件
+            dom.svPicker.addEventListener('touchstart', (e) => startDrag(e, 'sv'), { passive: false });
+            dom.hueSlider.addEventListener('touchstart', (e) => startDrag(e, 'hue'), { passive: false });
+
+            // 窗口resize事件 - 添加节流
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    if (updateCanvasSize()) { // 尺寸变了才重绘
+                        renderSVPicker();
+                    }
+                    positionHueHandle(); // 色相滑块位置可能需要更新
+                }, 150);
+            });
+        }
+
+        // 开始拖动（统一处理鼠标和触摸）
+        function startDrag(e, type) {
+            e.preventDefault();
+            isDragging = true;
+            dragType = type;
+            const isTouch = e.type.includes('touch');
+            // 立即更新一次位置
+            handleDrag(isTouch ? e.touches[0] : e);
+
+            // 绑定全局事件
+            const moveEvent = isTouch ? 'touchmove' : 'mousemove';
+            const endEvent = isTouch ? 'touchend' : 'mouseup';
+
+            const moveHandler = (e) => {
+                if (!isDragging) return;
+                handleDrag(isTouch ? e.touches[0] : e);
+            };
+
+            const endHandler = () => {
+                isDragging = false;
+                dragType = null;
+                document.removeEventListener(moveEvent, moveHandler);
+                document.removeEventListener(endEvent, endHandler);
+            };
+
+            document.addEventListener(moveEvent, moveHandler);
+            document.addEventListener(endEvent, endHandler);
+        }
+
+        // 处理拖动
+        function handleDrag({ clientX, clientY }) {
+            if (dragType === 'hue') {
+                const rect = dom.hueSlider.getBoundingClientRect();
+                let x = clientX - rect.left;
+                x = Math.max(0, Math.min(rect.width, x));
+                const h = (x / rect.width) * 360;
+                updateColor({ h });
+                dom.hueHandle.style.left = `${x}px`;
+            } else if (dragType === 'sv') {
+                const rect = dom.svPicker.getBoundingClientRect();
+                let x = clientX - rect.left;
+                let y = clientY - rect.top;
+                x = Math.max(0, Math.min(rect.width, x));
+                y = Math.max(0, Math.min(rect.height, y));
+                const s = (x / rect.width) * 100;
+                const v = 100 - (y / rect.height) * 100; // Y轴从上到下，亮度降低
+                updateColor({ s, v });
+                dom.svSelector.style.left = `${x}px`;
+                dom.svSelector.style.top = `${y}px`;
+            }
+            // 注意：更新颜色后，SV选择器的背景需要根据新的色相重新渲染
+            if (dragType === 'hue') {
+                renderSVPicker(); // 色相变化需要重绘Canvas
+            }
+            // 颜色显示和输入框在 updateUIFromColor 中更新
+        }
+
+        // 核心：更新颜色状态并刷新UI
+        function updateColor(newValues) {
+            // 合并新值到当前颜色
+            Object.assign(currentColor, newValues);
+            // 从HSV派生其他格式
+            const rgb = hsvToRgb(currentColor.h, currentColor.s, currentColor.v);
+            currentColor.rgb = rgb;
+            currentColor.hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            currentColor.hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+            // 更新UI
+            updateUIFromColor();
+        }
+
+        // 从十六进制颜色设置
+        function setColorFromHex(hex) {
+            const rgb = hexToRgb(hex);
+            const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+            updateColor({ ...hsv, hex: hex.startsWith('#') ? hex : `#${hex}` });
+            // 需要更新选择器位置和Canvas
+            positionHueHandle();
+            positionSVSelector();
+            renderSVPicker(); // 因为色相可能变了
+        }
+
+        // 更新所有UI元素以反映当前颜色
+        function updateUIFromColor() {
+            // 颜色显示块
+            dom.colorResult.style.backgroundColor = currentColor.hex;
+            // 输入框：显示时舍入，但内部存储浮点数
+            dom.hexInput.value = currentColor.hex.toUpperCase();
+            dom.rgbInput.value = `rgb(${Math.round(currentColor.rgb.r)}, ${Math.round(currentColor.rgb.g)}, ${Math.round(currentColor.rgb.b)})`;
+            dom.hslInput.value = `hsl(${Math.round(currentColor.hsl.h)}, ${Math.round(currentColor.hsl.s)}%, ${Math.round(currentColor.hsl.l)}%)`;
+        }
+
+        // 定位SV选择器
+        function positionSVSelector() {
+            const rect = dom.svPicker.getBoundingClientRect();
+            const x = (currentColor.s / 100) * rect.width;
+            const y = (1 - currentColor.v / 100) * rect.height; // 注意Y轴反转
+            dom.svSelector.style.left = `${x}px`;
+            dom.svSelector.style.top = `${y}px`;
+        }
+
+        // 定位色相滑块
+        function positionHueHandle() {
+            const rect = dom.hueSlider.getBoundingClientRect();
+            const x = (currentColor.h / 360) * rect.width;
+            dom.hueHandle.style.left = `${x}px`;
+        }
+
+        // --- 纯函数：颜色空间转换 (无副作用) ---
+        function hsvToRgb(h, s, v) {
+            h = h % 360;
+            s /= 100;
+            v /= 100;
+            const c = v * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = v - c;
+            let r, g, b;
+            if (h >= 0 && h < 60) [r, g, b] = [c, x, 0];
+            else if (h < 120) [r, g, b] = [x, c, 0];
+            else if (h < 180) [r, g, b] = [0, c, x];
+            else if (h < 240) [r, g, b] = [0, x, c];
+            else if (h < 300) [r, g, b] = [x, 0, c];
+            else [r, g, b] = [c, 0, x];
+            return {
+                r: Math.round((r + m) * 255),
+                g: Math.round((g + m) * 255),
+                b: Math.round((b + m) * 255)
+            };
+        }
+
+        function rgbToHsv(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const d = max - min;
+            let h = 0;
+            const s = max === 0 ? 0 : d / max;
+            const v = max;
+            if (d !== 0) {
+                if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+                else if (max === g) h = (b - r) / d + 2;
+                else h = (r - g) / d + 4;
+                h *= 60;
+            }
+            return { h: h, s: s * 100, v: v * 100 };
+        }
+
+        function rgbToHsl(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            const d = max - min;
+            let h = 0;
+            const l = (max + min) / 2;
+            const s = l === 0 || l === 1 ? 0 : d / (1 - Math.abs(2 * l - 1));
+            if (d !== 0) {
+                if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+                else if (max === g) h = (b - r) / d + 2;
+                else h = (r - g) / d + 4;
+                h *= 60;
+            }
+            return { h: h, s: s * 100, l: l * 100 };
+        }
+
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        }
+
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            return { r, g, b };
+        }
+
+        function hslToRgb(h, s, l) {
+            h /= 360; s /= 100; l /= 100;
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1;
+                if (t > 1) t -= 1;
+                if (t < 1 / 6) return p + (q - p) * 6 * t;
+                if (t < 1 / 2) return q;
+                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                return p;
+            };
+            let r, g, b;
+            if (s === 0) {
+                r = g = b = l;
+            } else {
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1 / 3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1 / 3);
+            }
+            return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+        }
+        // --- 颜色转换函数结束 ---
+
+        // 输入处理函数
+        function handleHexInput() {
+            let hex = dom.hexInput.value.trim();
+            if (!hex) return;
+            if (hex[0] !== '#') hex = '#' + hex;
+            const hexRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+            if (hexRegex.test(hex)) {
+                setColorFromHex(hex);
+            } else {
+                // 输入无效，恢复为当前值
+                dom.hexInput.value = currentColor.hex.toUpperCase();
+            }
+        }
+
+        function handleRgbInput() {
+            const text = dom.rgbInput.value.trim();
+            const match = text.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+            if (match) {
+                const r = parseInt(match[1]), g = parseInt(match[2]), b = parseInt(match[3]);
+                if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
+                    const hsv = rgbToHsv(r, g, b);
+                    updateColor({ ...hsv, rgb: { r, g, b } });
+                    positionHueHandle();
+                    positionSVSelector();
+                    renderSVPicker();
+                    return;
+                }
+            }
+            // 输入无效，恢复
+            dom.rgbInput.value = `rgb(${currentColor.rgb.r}, ${currentColor.rgb.g}, ${currentColor.rgb.b})`;
+        }
+
+        function handleHslInput() {
+            const text = dom.hslInput.value.trim();
+            const match = text.match(/^hsl\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*\)$/i);
+            if (match) {
+                const h = parseInt(match[1]), s = parseInt(match[2]), l = parseInt(match[3]);
+                if (h >= 0 && h <= 360 && s >= 0 && s <= 100 && l >= 0 && l <= 100) {
+                    const rgb = hslToRgb(h, s, l);
+                    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                    updateColor({ ...hsv, hsl: { h, s, l } });
+                    positionHueHandle();
+                    positionSVSelector();
+                    renderSVPicker();
+                    return;
+                }
+            }
+            // 输入无效，恢复
+            dom.hslInput.value = `hsl(${currentColor.hsl.h}, ${currentColor.hsl.s}%, ${currentColor.hsl.l}%)`;
+        }
+
+        // 按钮动作
+        function applyColor() {
+            alert(`已应用颜色: ${currentColor.hex}\nRGB: rgb(${currentColor.rgb.r}, ${currentColor.rgb.g}, ${currentColor.rgb.b})\nHSL: hsl(${currentColor.hsl.h}, ${currentColor.hsl.s}%, ${currentColor.hsl.l}%)`);
+            console.log("当前颜色信息:", currentColor);
+        }
+
+        function resetColor() {
+            setColorFromHex("#6c63ff");
+            // 预设颜色的激活状态已通过事件委托在点击时处理，重置时不需要遍历移除
+            const active = dom.presetGrid.querySelector('.preset-color.active');
+            if (active) active.classList.remove('active');
+        }
+
+        async function copyColor() {
+            try {
+                await navigator.clipboard.writeText(currentColor.hex);
+                const originalHTML = dom.copyBtn.innerHTML;
+                dom.copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                dom.copyBtn.style.backgroundColor = "#2E7D32";
+                setTimeout(() => {
+                    dom.copyBtn.innerHTML = originalHTML;
+                    dom.copyBtn.style.backgroundColor = "";
+                }, 1500);
+            } catch (err) {
+                console.error('复制失败:', err);
+                // 降级方案：使用document.execCommand
+                const textArea = document.createElement('textarea');
+                textArea.value = currentColor.hex;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('颜色值已复制到剪贴板！');
+                } catch (e) {
+                    alert('复制失败，请手动复制：' + currentColor.hex);
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+    </script>
+</body>
+</html>
