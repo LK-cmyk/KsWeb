@@ -6,6 +6,7 @@
     <title>KsWeb - 首页</title>
     <link rel="stylesheet" href="./static/css/index.css">
     <link rel="stylesheet" href="./static/css/hideScrollbar.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <!-- 背景图层 -->
@@ -20,14 +21,14 @@
         <!-- 导航栏 -->
         <nav class="navbar">
             <div class="nav-brand">
-                <h2>KsWeb</h2>
+                <h2><i class="fas fa-cube"></i> KsWeb</h2>
             </div>
             <ul class="nav-menu">
-                <li><a href="./index.html">首页</a></li>
-                <li><a href="./about.html">关于</a></li>
+                <li><a href="../index.html"><i class="fas fa-home"></i> 首页</a></li>
+                <li><a href="../about.html"><i class="fas fa-info-circle"></i> 关于</a></li>
             </ul>
         </nav>
-
+        
         <!-- 工具区域 -->
         <section class="tools-section">
             <div class="section-header">
@@ -47,12 +48,19 @@
                     <p>生成3.0/2.0脚本</p>
                     <a class="primary-btn" href="./tools/MNPixelPic.html">打开</a>
                 </div>
+                <div class="tool-card glass-card">
+                    <div class="tool-icon"><img src="https://ksimg.dpdns.org/?file=img/MNIdViewer.svg"></div>
+                    <h3>《迷你世界》物品ID查询</h3>
+                    <p>提供物品ID和相关信息</p>
+                    <a class="primary-btn" href="./tools/MNIdViewer.html">打开</a>
             </div>
         </section>
 
         <!-- 页脚 -->
         <footer class="footer">
-            <p>Coding your life.</p>
+            <div class="footer-content">
+                <p><i class="fas fa-code"></i> Coding your life.</p>
+            </div>
         </footer>
     </main>
 </body>

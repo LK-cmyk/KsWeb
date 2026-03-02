@@ -213,6 +213,12 @@ body {
 .tool-icon {
     font-size: 3rem;
     margin-bottom: 20px;
+    max-height: 69.9px;
+}
+
+.tool-icon img {
+    width: 70px;
+    height: 70px;
 }
 
 .tool-card h3 {
@@ -230,14 +236,40 @@ body {
 /* 页脚 */
 .footer {
     text-align: center;
-    padding: 20px 0;
+    padding: 30px 0;
     color: var(--text-secondary);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px); /* 兼容 */
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     background: var(--bg-dark);
-    border-top: 3px solid var(--border-light);
+    border-top: 1px solid var(--border-light);
     width: 100vw;
     margin-left: calc(50% - 50vw);
+    margin-top: 60px;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+.footer p {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 1rem;
+}
+
+.footer .copyright {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+.footer i {
+    color: var(--primary-light);
 }
 
 /* 响应式设计 */
