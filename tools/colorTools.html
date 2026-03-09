@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="../static/css/colorTools.css"> <!-- 修改后的CSS文件 -->
+    <link rel="stylesheet" href="../static/css/colorTools.css">
 </head>
 <body>
     <div class="background">
@@ -18,6 +18,17 @@
     </div>
 
     <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h2><i class="fas fa-cube"></i> KsWeb</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="../index.html"><i class="fas fa-home"></i> 首页</a></li>
+                <li><a href="../about.html"><i class="fas fa-info-circle"></i> 关于</a></li>
+            </ul>
+        </nav>
+
         <header>
             <h1><i class="fas fa-palette"></i> 拾色器</h1>
             <p class="subtitle">by.K_Lan</p>
@@ -104,7 +115,8 @@
         let dragType = null; // 'hue' 或 'sv'
         let svCanvasCtx = null;
 
-        // 初始化 - 使用DOMContentLoaded确保DOM已加载
+        // 初始化
+        // 使用DOMContentLoaded确保DOM已加载
         document.addEventListener('DOMContentLoaded', init);
 
         function init() {
@@ -143,36 +155,35 @@
             return false;
         }
 
-        // **优化核心：改进的SV选择器渲染**
         // 使用CSS水平渐变模拟饱和度，Canvas垂直渐变模拟亮度，性能远优于逐像素绘制。
         function renderSVPicker() {
             const width = dom.svPicker.clientWidth;
             const height = dom.svPicker.clientHeight;
             const ctx = svCanvasCtx;
 
-            // 1. 清除画布
+            // 清除画布
             ctx.clearRect(0, 0, width, height);
 
-            // 2. 创建饱和度的水平渐变（从白色到纯色）
+            // 创建饱和度的水平渐变（从白色到纯色）
             const hueColor = `hsl(${currentColor.h}, 100%, 50%)`;
             const saturationGradient = ctx.createLinearGradient(0, 0, width, 0);
             saturationGradient.addColorStop(0, '#FFFFFF');
             saturationGradient.addColorStop(1, hueColor);
 
-            // 3. 创建亮度的垂直渐变（从透明到黑色），叠加在上面
+            // 创建亮度的垂直渐变（从透明到黑色），叠加在上面
             const brightnessGradient = ctx.createLinearGradient(0, 0, 0, height);
             brightnessGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
             brightnessGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
 
-            // 4. 先填充饱和度渐变
+            // 先填充饱和度渐变
             ctx.fillStyle = saturationGradient;
             ctx.fillRect(0, 0, width, height);
 
-            // 5. 再叠加亮度渐变
+            // 再叠加亮度渐变
             ctx.fillStyle = brightnessGradient;
             ctx.fillRect(0, 0, width, height);
 
-            // 6. 更新选择器位置
+            // 更新选择器位置
             positionSVSelector();
         }
 
@@ -202,7 +213,7 @@
             });
         }
 
-        // 绑定事件（优化后的拖动逻辑）
+        // 绑定事件
         function bindEvents() {
             // 按钮事件
             dom.applyBtn.addEventListener('click', applyColor);
@@ -215,7 +226,7 @@
             dom.rgbInput.addEventListener('change', handleRgbInput);
             dom.hslInput.addEventListener('change', handleHslInput);
 
-            // 鼠标/触摸拖动事件 - 使用更高效的事件绑定
+            // 鼠标/触摸拖动事件
             dom.svPicker.addEventListener('mousedown', (e) => startDrag(e, 'sv'));
             dom.hueSlider.addEventListener('mousedown', (e) => startDrag(e, 'hue'));
 
@@ -223,7 +234,7 @@
             dom.svPicker.addEventListener('touchstart', (e) => startDrag(e, 'sv'), { passive: false });
             dom.hueSlider.addEventListener('touchstart', (e) => startDrag(e, 'hue'), { passive: false });
 
-            // 窗口resize事件 - 添加节流
+            // 窗口resize事件
             let resizeTimeout;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
@@ -343,7 +354,7 @@
             dom.hueHandle.style.left = `${x}px`;
         }
 
-        // --- 纯函数：颜色空间转换 (无副作用) ---
+        // HSV -> RGB
         function hsvToRgb(h, s, v) {
             h = h % 360;
             s /= 100;
@@ -365,6 +376,7 @@
             };
         }
 
+        // RGB -> HSV
         function rgbToHsv(r, g, b) {
             r /= 255; g /= 255; b /= 255;
             const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -381,6 +393,7 @@
             return { h: h, s: s * 100, v: v * 100 };
         }
 
+        // RGB -> HSL
         function rgbToHsl(r, g, b) {
             r /= 255; g /= 255; b /= 255;
             const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -397,10 +410,12 @@
             return { h: h, s: s * 100, l: l * 100 };
         }
 
+        // RGB -> Hex
         function rgbToHex(r, g, b) {
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
         }
 
+        // Hex -> RGB
         function hexToRgb(hex) {
             hex = hex.replace('#', '');
             if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
@@ -410,6 +425,7 @@
             return { r, g, b };
         }
 
+        // HSL -> RGB
         function hslToRgb(h, s, l) {
             h /= 360; s /= 100; l /= 100;
             const hue2rgb = (p, q, t) => {
@@ -432,7 +448,6 @@
             }
             return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
         }
-        // --- 颜色转换函数结束 ---
 
         // 输入处理函数
         function handleHexInput() {
@@ -510,7 +525,6 @@
                 }, 1500);
             } catch (err) {
                 console.error('复制失败:', err);
-                // 降级方案：使用document.execCommand
                 const textArea = document.createElement('textarea');
                 textArea.value = currentColor.hex;
                 document.body.appendChild(textArea);

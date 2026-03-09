@@ -45,13 +45,7 @@
                 <div class="control-group">
                     <h3><i class="fas fa-filter"></i> 分类筛选</h3>
                     <div class="category-tabs" id="categoryTabs">
-                        <div class="tab active" data-category="all">
-                            <i class="fas fa-th"></i> 全部
-                        </div>
-                        <div class="tab" data-category="block">
-                            <i class="fas fa-cube"></i> 道具 & 方块
-                        </div>
-                        <!-- 可根据数据扩展更多分类 -->
+                        <!-- 选项卡将在JS中根据 urls 动态生成 -->
                     </div>
                 </div>
 
@@ -87,20 +81,7 @@
 
                 <!-- 物品卡片网格 -->
                 <div class="items-grid" id="itemsGrid">
-                    <!-- 静态示例卡片，实际由JS动态生成 -->
-                    <div class="item-card" data-category="block">
-                        <div class="item-header">
-                            <span class="item-id"><i class="fas fa-hashtag"></i> ID: 1001</span>
-                            <span class="item-category">方块</span>
-                        </div>
-                        <h3 class="item-name">石头</h3>
-                        <p class="item-desc">一种常见的建筑材料，可用于搭建结构。</p>
-                        <div class="item-footer">
-                            <button class="copy-btn" data-id="1001">
-                                <i class="far fa-copy"></i> 复制ID
-                            </button>
-                        </div>
-                    </div>
+                    <!-- 物品卡片由JS动态生成 -->
                 </div>
 
                 <!-- 分页控件 -->
@@ -109,7 +90,7 @@
                         <!-- 分页按钮由JS动态生成 -->
                     </div>
                     <div class="page-size-info">
-                        每页显示 <span class="highlight">24</span> 个物品
+                        每页显示 <span class="highlight">28</span> 个物品
                     </div>
                 </div>
             </div>
@@ -125,36 +106,302 @@
     </main>
 
     <script>
-        const url = "https://ksimg.dpdns.org/?file=data/ItemData.json"; // 数据URL
+        const urls = [
+            ["https://ksimg.dpdns.org/?file=data/MNItem.json", "ItemBlock", "物品&方块"],
+            ["https://ksimg.dpdns.org/?file=data/MNBuff.json", "Buff", "状态"]
+        ]; // 数据URL数组，支持多个URL。每个条目格式：[url, categoryKey, categoryDisplayName]
+        // categoryKey 会写入每条记录的 item.Category，用于筛选
+        // categoryDisplayName 用于在选项卡中显示名称
+        
+        // 由 urls 构建的映射：key -> 显示名称，用于卡片中展示及其他用途
+        const categoryNames = Object.fromEntries(urls.map(([_, key, name]) => [key, name]));
         const ITEMS_PER_PAGE = 24; // 每页显示24个物品
+        
+        // 缓存配置
+        const CACHE_KEY = 'itemDataCache';
+        const CACHE_DURATION = 7200000; // 缓存有效时间：2小时（7200000毫秒）
+        const LAST_UPDATE_KEY = 'itemDataLastUpdate';
         
         // 全局状态变量
         let itemsData = []; // 原始数据
         let filteredItems = []; // 当前筛选后的数据
         let currentPage = 1; // 当前页码
         let totalPages = 1; // 总页数
-        let currentCategory = 'all'; // 当前分类
+        // 默认选中第一个URL的分类
+        let currentCategory = urls.length > 0 ? urls[0][1] : '';
         let searchTerm = ''; // 当前搜索词
-
-        async function getData() {
-            const apiUrl = url;
-
+        
+        // 缓存相关函数
+        function getCachedData() {
             try {
-                const response = await fetch(apiUrl);
-
-                if (!response.ok) {
-                    throw new Error(`网络响应错误: ${response.status}`);
+                const cached = localStorage.getItem(CACHE_KEY);
+                const lastUpdate = localStorage.getItem(LAST_UPDATE_KEY);
+                
+                if (!cached || !lastUpdate) {
+                    console.log('无缓存数据');
+                    return null;
                 }
-
-                let itemData = await response.json();
-                console.log("获取到的数据:", itemData);
-                return itemData;
+                
+                const now = Date.now();
+                const lastUpdateTime = parseInt(lastUpdate, 10);
+                const cacheAge = now - lastUpdateTime;
+                
+                if (cacheAge > CACHE_DURATION) {
+                    console.log(`缓存已过期，缓存时间: ${Math.round(cacheAge/1000/60)}分钟前`);
+                    clearCache(); // 清除过期缓存
+                    return null;
+                }
+                
+                console.log(`使用缓存数据，缓存时间: ${Math.round(cacheAge/1000/60)}分钟前`);
+                return JSON.parse(cached);
             } catch (error) {
-                console.error('获取数据失败:', error);
-                return []; // 返回空数组，避免后续代码出错
+                console.error('读取缓存失败:', error);
+                clearCache(); // 如果缓存数据损坏，清除它
+                return null;
             }
         }
-
+        
+        function saveToCache(data) {
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+                localStorage.setItem(LAST_UPDATE_KEY, Date.now().toString());
+                console.log('数据已保存到缓存');
+            } catch (error) {
+                console.error('保存缓存失败:', error);
+                // 如果存储失败，可能是存储空间不足，清除一些旧缓存
+                clearCache();
+            }
+        }
+        
+        function clearCache() {
+            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(LAST_UPDATE_KEY);
+            console.log('缓存已清除');
+        }
+        
+        // 添加清除缓存按钮到UI
+        function addCacheControls() {
+            const headerControls = document.querySelector('.header-controls');
+            if (!headerControls) return;
+            
+            const cacheControl = document.createElement('div');
+            cacheControl.className = 'cache-controls';
+            cacheControl.innerHTML = `
+                <button id="clearCacheBtn" class="clear-cache-btn" title="清除缓存并重新获取数据">
+                    <i class="fas fa-sync-alt"></i> 刷新数据
+                </button>
+                <span id="cacheStatus" class="cache-status">
+                    <i class="fas fa-database"></i> 已缓存
+                </span>
+            `;
+            
+            headerControls.appendChild(cacheControl);
+            
+            // 绑定清除缓存按钮事件
+            document.getElementById('clearCacheBtn').addEventListener('click', async function() {
+                if (confirm('确定要清除缓存并重新获取最新数据吗？')) {
+                    clearCache();
+                    
+                    // 显示加载状态
+                    const itemsGrid = document.getElementById('itemsGrid');
+                    itemsGrid.innerHTML = '<div class="loading"><i class="fas fa-sync fa-spin"></i> 正在获取最新数据...</div>';
+                    
+                    // 更新缓存状态显示
+                    const cacheStatus = document.getElementById('cacheStatus');
+                    cacheStatus.innerHTML = '<i class="fas fa-sync fa-spin"></i> 获取中...';
+                    cacheStatus.className = 'cache-status loading';
+                    
+                    // 禁用按钮防止重复点击
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-sync fa-spin"></i> 获取中...';
+                    
+                    try {
+                        // 重新获取数据
+                        itemsData = await fetchData();
+                        filteredItems = [...itemsData];
+                        applyFilters();
+                        
+                        // 更新缓存状态
+                        cacheStatus.innerHTML = '<i class="fas fa-database"></i> 已更新';
+                        cacheStatus.className = 'cache-status';
+                        
+                        // 显示成功提示
+                        showMessage('数据已成功更新！', 'success');
+                    } catch (error) {
+                        cacheStatus.innerHTML = '<i class="fas fa-exclamation-triangle"></i> 获取失败';
+                        cacheStatus.className = 'cache-status error';
+                        showMessage('数据更新失败，请检查网络连接', 'error');
+                    } finally {
+                        // 恢复按钮状态
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-sync-alt"></i> 刷新数据';
+                    }
+                }
+            });
+            
+            // 更新缓存状态显示
+            updateCacheStatus();
+        }
+        
+        function updateCacheStatus() {
+            const cacheStatus = document.getElementById('cacheStatus');
+            if (!cacheStatus) return;
+            
+            const lastUpdate = localStorage.getItem(LAST_UPDATE_KEY);
+            if (!lastUpdate) {
+                cacheStatus.innerHTML = '<i class="fas fa-times-circle"></i> 无缓存';
+                cacheStatus.className = 'cache-status no-cache';
+                return;
+            }
+            
+            const now = Date.now();
+            const lastUpdateTime = parseInt(lastUpdate, 10);
+            const cacheAge = now - lastUpdateTime;
+            const minutes = Math.floor(cacheAge / 60000);
+            const hours = Math.floor(minutes / 60);
+            
+            let statusText = '已缓存';
+            if (minutes < 1) {
+                statusText = '刚刚更新';
+            } else if (hours < 1) {
+                statusText = `${minutes}分钟前`;
+            } else {
+                statusText = `${hours}小时前`;
+            }
+            
+            cacheStatus.innerHTML = `<i class="fas fa-database"></i> ${statusText}`;
+            cacheStatus.className = 'cache-status';
+            
+            // 如果缓存即将过期（剩下不到5分钟），显示警告
+            if (cacheAge > CACHE_DURATION - 300000) { // 300000ms = 5分钟
+                cacheStatus.className = 'cache-status warning';
+            }
+        }
+        
+        function showMessage(message, type = 'info') {
+            // 移除现有的消息
+            const existingMsg = document.querySelector('.message-toast');
+            if (existingMsg) {
+                existingMsg.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message-toast ${type}`;
+            messageDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            
+            document.body.appendChild(messageDiv);
+            
+            // 显示消息
+            setTimeout(() => {
+                messageDiv.classList.add('show');
+            }, 10);
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                messageDiv.classList.remove('show');
+                setTimeout(() => {
+                    if (messageDiv.parentNode) {
+                        messageDiv.remove();
+                    }
+                }, 300);
+            }, 3000);
+        }
+        
+        async function getData() {
+            // 首先尝试从缓存获取数据
+            const cachedData = getCachedData();
+            if (cachedData) {
+                console.log('从缓存加载数据');
+                updateCacheStatus(); // 更新缓存状态显示
+                return cachedData;
+            }
+            
+            console.log('缓存不存在或已过期，从网络获取数据');
+            
+            // 如果没有缓存或缓存过期，从网络获取
+            const freshData = await fetchData();
+            return freshData;
+        }
+        
+        async function fetchData() {
+            let allItemData = [];
+            
+            try {
+                // 循环获取每个URL的数据
+                for (const urlEntry of urls) {
+                    const [apiUrl, categoryKey] = urlEntry;
+                    console.log(`正在获取数据: ${apiUrl}`);
+                    
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        console.warn(`URL ${apiUrl} 响应错误: ${response.status}，跳过此URL`);
+                        continue; // 跳过失败的URL，继续下一个
+                    }
+                    
+                    let itemData = await response.json();
+                    console.log(`从 ${apiUrl} 获取到 ${itemData?.length || 0} 条记录`);
+                    
+                    // 如果数据是数组，先为每条记录添加分类字段，然后合并
+                    if (Array.isArray(itemData)) {
+                        itemData.forEach(item => {
+                            if (categoryKey) {
+                                item.Category = categoryKey;
+                            }
+                        });
+                        allItemData = allItemData.concat(itemData);
+                    } else {
+                        console.warn(`从 ${apiUrl} 获取的数据不是数组格式，已跳过`);
+                    }
+                }
+                
+                // 去重：根据ID去重，保留第一个出现的
+                const seenIds = new Set();
+                allItemData = allItemData.filter(item => {
+                    const id = item.ID || item.id;
+                    if (id && !seenIds.has(id)) {
+                        seenIds.add(id);
+                        return true;
+                    }
+                    return false;
+                });
+                
+                console.log("合并并去重后，共", allItemData.length, "条记录");
+                
+                // 保存到缓存
+                if (allItemData && allItemData.length > 0) {
+                    saveToCache(allItemData);
+                    updateCacheStatus(); // 更新缓存状态显示
+                }
+                
+                return allItemData;
+            } catch (error) {
+                console.error('获取数据失败:', error);
+                
+                // 即使网络请求失败，也尝试从可能已过期的缓存中获取
+                const expiredCache = localStorage.getItem(CACHE_KEY);
+                if (expiredCache) {
+                    console.log('网络请求失败，使用已过期的缓存数据');
+                    showMessage('使用缓存数据（可能不是最新）', 'warning');
+                    return JSON.parse(expiredCache);
+                }
+                
+                return []; // 返回空数组
+            }
+        }
+        
+        // 解析颜色代码的函数
+        function parseColorText(text) {
+            return text.replace(/#([0-9a-fA-F]{7})(.+?)#n/g, function(match, color, content) {
+                // 取前6位作为颜色码，最后一位忽略
+                const validColor = color.substring(0, 6);
+                return '<span style="color: #' + validColor + ';">' + content + '</span>';
+            });
+        }
+        
         // 动态渲染物品卡片的函数
         function renderItems(itemsArray, page = 1) {
             const itemsGrid = document.getElementById('itemsGrid');
@@ -165,7 +412,7 @@
             
             // 清空现有内容
             itemsGrid.innerHTML = '';
-
+            
             // 检查是否有数据
             if (!itemsArray || itemsArray.length === 0) {
                 itemsGrid.innerHTML = '<div class="no-data">暂无物品数据</div>';
@@ -173,32 +420,37 @@
                 updatePageInfo(0, 1, false);
                 return;
             }
-
+            
             // 计算分页起始和结束位置
             const startIndex = (page - 1) * ITEMS_PER_PAGE;
             const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, itemsArray.length);
             
             // 获取当前页的物品
             const currentPageItems = itemsArray.slice(startIndex, endIndex);
-
+            
             // 遍历当前页数据数组，为每个物品创建卡片
             for (const item of currentPageItems) {
                 const itemCard = document.createElement('div');
                 itemCard.className = 'item-card';
-                itemCard.setAttribute('data-category', item.Category || 'block');
-                itemCard.setAttribute('data-id', item.ID); // 存储ID，便于复制功能使用
+                // 存储分类用于筛选
+                itemCard.setAttribute('data-category', item.Category || '');
+                // 存储ID，便于复制功能使用
+                itemCard.setAttribute('data-id', item.id || item.ID);
                 itemCard.title = "点击复制ID"; // 添加悬停提示
-
+                
+                // 尝试获取类别的显示名称
+                const displayCat = categoryNames[item.Category] || '';
+                
                 // 填充卡片内部HTML结构
                 itemCard.innerHTML = `
                     <div class="item-header">
                         <span class="item-id"><i class="fas fa-hashtag"></i> ID: ${item.id || 'N/A'}</span>
-                        <span class="item-category">${/* 如果数据中没有Category字段，您可以留空或使用默认值 */ '方块&道具'}</span>
+                        <span class="item-category">${displayCat}</span>
                     </div>
                     <h3 class="item-name">${item.name || '未命名物品'}</h3>
-                    <p class="item-desc">${item.description || '暂无描述'}</p>
+                    <p class="item-desc">${parseColorText(item.desc || '暂无描述')}</p>
                 `;
-
+                
                 // 为当前卡片绑定点击复制ID的事件
                 itemCard.addEventListener('click', function(event) {
                     // 阻止事件冒泡，避免与可能存在的父元素事件冲突
@@ -270,7 +522,7 @@
                         }
                     });
                 });
-
+                
                 itemsGrid.appendChild(itemCard);
             }
             
@@ -280,7 +532,7 @@
             // 更新分页控件
             updatePaginationControls(itemsArray.length, page);
         }
-
+        
         // 更新页面信息显示
         function updatePageInfo(totalItems, currentPage, hasItems = true) {
             const totalCountSpan = document.getElementById('totalCount');
@@ -292,7 +544,7 @@
             }
             
             if (currentCategorySpan) {
-                const categoryName = document.querySelector('.tab.active')?.textContent || '所有分类';
+                const categoryName = document.querySelector('.tab.active')?.textContent || '';
                 currentCategorySpan.textContent = categoryName;
             }
             
@@ -306,7 +558,7 @@
                 }
             }
         }
-
+        
         // 更新分页控件
         function updatePaginationControls(totalItems, currentPage) {
             // 计算总页数
@@ -421,7 +673,7 @@
             
             paginationContainer.appendChild(pageJumpContainer);
         }
-
+        
         // 跳转到指定页面
         function goToPage(page) {
             if (page < 1 || page > totalPages || page === currentPage) {
@@ -434,23 +686,23 @@
             // 滚动到顶部，方便查看新页面内容
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
-
+        
         // 应用分类和搜索筛选
         function applyFilters() {
             // 根据分类筛选
             let result = itemsData;
             
-            if (currentCategory !== 'all') {
-                result = result.filter(item => (item.Category || 'block') === currentCategory);
+            if (currentCategory) {
+                result = result.filter(item => (item.Category || '') === currentCategory);
             }
             
             // 根据搜索词筛选
             if (searchTerm.trim() !== '') {
                 const term = searchTerm.toLowerCase().trim();
                 result = result.filter(item => {
-                    const name = item.ItemName?.toLowerCase() || '';
-                    const id = item.ID?.toString().toLowerCase() || '';
-                    const desc = item.Description?.toLowerCase() || '';
+                    const name = item.name?.toLowerCase() || '';
+                    const id = item.id?.toString().toLowerCase() || '';
+                    const desc = item.desc?.toLowerCase() || '';
                     
                     return name.includes(term) || id.includes(term) || desc.includes(term);
                 });
@@ -477,7 +729,7 @@
             // 渲染筛选后的结果
             renderItems(filteredItems, currentPage);
         }
-
+        
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('页面加载完成，开始初始化...');
@@ -490,16 +742,66 @@
             
             // 显示加载状态
             const itemsGrid = document.getElementById('itemsGrid');
-            itemsGrid.innerHTML = '<div class="loading">正在加载数据...</div>';
+            itemsGrid.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> 正在加载数据...</div>';
             
             try {
-                // 异步获取数据
+                // 添加缓存控制UI
+                addCacheControls();
+                
+                // 添加控制台刷新缓存指令
+                window.refreshCache = async function() {
+                    console.log('正在刷新缓存...');
+                    clearCache();
+                    
+                    // 显示加载状态
+                    const itemsGrid = document.getElementById('itemsGrid');
+                    itemsGrid.innerHTML = '<div class="loading"><i class="fas fa-sync fa-spin"></i> 正在刷新数据...</div>';
+                    
+                    try {
+                        // 重新获取数据
+                        itemsData = await fetchData();
+                        filteredItems = [...itemsData];
+                        applyFilters();
+                        
+                        console.log('缓存刷新完成！');
+                        showMessage('缓存已刷新！', 'success');
+                    } catch (error) {
+                        console.error('刷新缓存失败:', error);
+                        itemsGrid.innerHTML = '<div class="error"><i class="fas fa-exclamation-triangle"></i> 刷新失败，请检查网络连接</div>';
+                        showMessage('刷新失败，请检查网络连接', 'error');
+                    }
+                };
+                
+                // 异步获取数据（会自动使用缓存）
                 console.log('开始获取数据...');
                 itemsData = await getData();
                 console.log('数据获取完成，共获取到', itemsData?.length || 0, '条记录');
                 
+                // 如果没有获取到任何数据，则提醒用户
+                if (!itemsData || itemsData.length === 0) {
+                    showMessage('未能获取到物品数据，请检查网络或缓存', 'error');
+                }
+                
                 // 初始化筛选数据
                 filteredItems = [...itemsData];
+                
+                // 动态生成分类选项卡（根据 urls 数组）
+                const categoryTabs = document.getElementById('categoryTabs');
+                if (categoryTabs) {
+                    categoryTabs.innerHTML = '';
+                    urls.forEach(([_, cat, catName], idx) => {
+                        const tab = document.createElement('div');
+                        tab.className = 'tab' + (idx === 0 ? ' active' : '');
+                        tab.setAttribute('data-category', cat);
+                        tab.innerHTML = `<i class="fas fa-tag"></i> ${catName}`;
+                        categoryTabs.appendChild(tab);
+                    });
+                    // 如果有tab，确保currentCategory与第一个tab一致
+                    if (urls.length > 0) {
+                        currentCategory = urls[0][1];
+                    }
+
+                }
                 
                 // 绑定分类选项卡事件
                 const tabs = document.querySelectorAll('.tab');
@@ -545,7 +847,7 @@
                 
             } catch (error) {
                 console.error('初始化过程中发生错误:', error);
-                itemsGrid.innerHTML = '<div class="error">加载数据失败，请检查网络连接或API配置</div>';
+                itemsGrid.innerHTML = '<div class="error"><i class="fas fa-exclamation-triangle"></i> 加载数据失败，请检查网络连接或API配置</div>';
             }
         });
     </script>
