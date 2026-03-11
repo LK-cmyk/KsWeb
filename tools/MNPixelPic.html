@@ -5,24 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>像素画生成器 - 图片转Lua脚本</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../static/css/MNPixelPic.css">
 </head>
 <body>
     <header>
         <div class="container">
-            <h1 class="tagline">像素画生成器</h1>
-            <p class="subtitle">将图片转换为游戏中的像素画Lua脚本（支持批量处理）</p>
+            <nav class="navbar">
+                <div class="nav-brand">
+                    <h2><i class="fas fa-cube"></i> KsWeb</h2>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="../index.html"><i class="fas fa-home"></i> 首页</a></li>
+                    <li><a href="../about.html"><i class="fas fa-info-circle"></i> 关于</a></li>
+                </ul>
+            </nav>
         </div>
     </header>
+
+    <div class="container">
+        <h1 class="tagline">像素画生成器</h1>
+        <p class="subtitle">将图片转换为游戏中的像素画Lua脚本</p>
+    </div>
 
     <div id="pixelApp">
         <div class="container">
             <div class="app-container">
                 <div class="control-panel">
                     <section>
-                        <h2 class="section-title">图片上传</h2>
+                        <h2 class="section-title"><i class="fa-regular fa-image"></i> 图片上传</h2>
                         <div class="upload-area" @drop="dropfile" @dragover.prevent>
-                            <p class="upload-text">拖放图片到此处或点击上传</p>
+                            <p class="upload-text"><i class="fa-solid fa-file-arrow-up"></i> 拖放图片到此处或点击上传</p>
                             <p>支持 JPG, PNG, GIF 等格式</p>
                             <input type="file" class="file-input" @change="handleUploadFile" accept="image/*" ref="fileInput" multiple>
                         </div>
@@ -44,9 +57,9 @@
                     </section>
 
                     <section>
-                        <h2 class="section-title">生成设置</h2>
+                        <h2 class="section-title"><i class="fa-solid fa-gear"></i> 生成设置</h2>
                         <div class="form-group">
-                            <label for="mode">脚本模式</label>
+                            <label for="mode"><i class="fa-solid fa-bars-staggered"></i> 脚本模式</label>
                             <select id="mode" v-model="mode">
                                 <option value="3.0">3.0 模式</option>
                                 <option value="2.0">2.0 模式</option>
@@ -55,12 +68,12 @@
 
                         <div class="dimension-controls">
                             <div class="form-group">
-                                <label for="width">目标宽度 (像素)</label>
+                                <label for="width"><i class="fa-solid fa-text-width"></i> 目标宽度 (像素)</label>
                                 <input type="number" id="width" v-model.number="destImgWidth" @input="inputWidth" min="1" max="500">
                             </div>
 
                             <div class="form-group">
-                                <label for="height">目标高度 (像素)</label>
+                                <label for="height"><i class="fa-solid fa-text-height"></i> 目标高度 (像素)</label>
                                 <input type="number" id="height" v-model.number="destImgHeight" @input="inputHeight" min="1" max="500">
                             </div>
                         </div>
@@ -71,7 +84,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="blockid">方块ID</label>
+                            <label for="blockid"><i class="fa-solid fa-cube"></i> 方块ID</label>
                             <input type="number" id="blockid" v-model.number="blockid" min="1" max="1000">
                         </div>
 
@@ -84,7 +97,7 @@
 
                 <div class="preview-panel">
                     <section>
-                        <h2 class="section-title">图片预览</h2>
+                        <h2 class="section-title"><i class="fa fa-magnifying-glass"></i> 图片预览</h2>
                         <div class="image-preview">
                             <img v-if="imageBase64Data" :src="imageBase64Data" class="preview-img" alt="预览图片">
                             <p v-else class="no-image">暂无图片</p>
