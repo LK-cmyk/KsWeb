@@ -165,9 +165,8 @@ h1 {
     background: rgba(255, 255, 255, 0.05);
     border: 2px solid var(--border-light);
     border-radius: 10px;
-    font-size: 1rem;
+    font-size: 0.9rem;
     transition: all 0.3s;
-    font-family: monospace;
     color: var(--text-primary);
 }
 

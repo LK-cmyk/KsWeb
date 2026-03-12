@@ -30,7 +30,7 @@
         </nav>
 
         <header>
-            <h1><i class="fas fa-palette"></i> 拾色器</h1>
+            <h1><i class="fas fa-palette"></i> 调色板</h1>
             <p class="subtitle">by.K_Lan</p>
         </header>
         
@@ -43,15 +43,21 @@
                         <label><i class="fas fa-hashtag"></i> 十六进制</label>
                         <input type="text" id="hexInput" value="#6c63ff" maxlength="7">
                     </div>
-                    
                     <div class="value-group">
                         <label><i class="fas fa-sliders-h"></i> RGB值</label>
                         <input type="text" id="rgbInput" value="rgb(108, 99, 255)">
                     </div>
-                    
                     <div class="value-group">
                         <label><i class="fas fa-circle"></i> HSL值</label>
                         <input type="text" id="hslInput" value="hsl(244, 100%, 69%)">
+                    </div>
+                    <div class="value-group">
+                        <label><i class="fas fa-adjust"></i> CMYK值</label>
+                        <input type="text" id="cmykInput" value="cmyk(0%, 0%, 0%, 100%)">
+                    </div>
+                    <div class="value-group">
+                        <label><i class="fas fa-vial"></i> LAB值</label>
+                        <input type="text" id="labInput" value="lab(0, 0, 0)">
                     </div>
                 </div>
             </div>
@@ -90,33 +96,11 @@
     </div>
 
     <script>
-        // 全局颜色状态
-        let currentColor = {
-            h: 0, // 色相 (0-360)
-            s: 0, // 饱和度 (0-100)
-            v: 0, // 亮度 (0-100)
-            hex: "#000000",
-            rgb: { r: 0, g: 0, b: 0 },
-            hsl: { h: 0, s: 0, l: 0 }
-        };
-
-        // 预设颜色
-        const presetColors = [
-            "#FF5252", "#FF4081", "#E040FB", "#7C4DFF", "#536DFE",
-            "#448AFF", "#40C4FF", "#18FFFF", "#64FFDA", "#69F0AE",
-            "#B2FF59", "#EEFF41", "#FFFF00", "#FFD740", "#FFAB40",
-            "#FF6E40", "#FF3D00", "#795548", "#9E9E9E", "#607D8B",
-            "#000000", "#FFFFFF", "#6c63ff", "#4CAF50", "#2196F3"
-        ];
-
-        // 缓存DOM元素
+        let currentColor = { h: 0, s: 0, v: 0, hex: "#000000", rgb: { r: 0, g: 0, b: 0 }, hsl: { h: 0, s: 0, l: 0 }, cmyk: {c:0,m:0,y:0,k:1}, lab: {l:0,a:0,b:0} };
+        const presetColors = ["#FF5252", "#FF4081", "#E040FB", "#7C4DFF", "#536DFE", "#448AFF", "#40C4FF", "#18FFFF", "#64FFDA", "#69F0AE", "#B2FF59", "#EEFF41", "#FFFF00", "#FFD740", "#FFAB40", "#FF6E40", "#FF3D00", "#795548", "#9E9E9E", "#607D8B", "#000000", "#FFFFFF", "#6c63ff", "#4CAF50", "#2196F3"];
         const dom = {};
-        let isDragging = false;
-        let dragType = null; // 'hue' 或 'sv'
-        let svCanvasCtx = null;
+        let isDragging = false, dragType = null, svCanvasCtx = null;
 
-        // 初始化
-        // 使用DOMContentLoaded确保DOM已加载
         document.addEventListener('DOMContentLoaded', init);
 
         function init() {
@@ -127,69 +111,48 @@
             updateUIFromColor();
         }
 
-        // 缓存DOM元素引用，避免重复查询
         function cacheDOMElements() {
-            const ids = ['colorResult', 'hexInput', 'rgbInput', 'hslInput', 'svPicker', 'svSelector', 'hueSlider', 'hueHandle', 'presetGrid', 'applyBtn', 'resetBtn', 'copyBtn'];
-            ids.forEach(id => dom[id] = document.getElementById(id));
+            ['colorResult', 'hexInput', 'rgbInput', 'hslInput', 'cmykInput', 'labInput', 'svPicker', 'svSelector', 'hueSlider', 'hueHandle', 'presetGrid', 'applyBtn', 'resetBtn', 'copyBtn'].forEach(id => dom[id] = document.getElementById(id));
         }
 
-        // 创建SV选择器的Canvas上下文（只创建一次）
         function createSVPickerCanvas() {
             const canvas = document.createElement('canvas');
             svCanvasCtx = canvas.getContext('2d');
-            dom.svPicker.insertBefore(canvas, dom.svSelector); // 将canvas放在选择器下面
+            dom.svPicker.insertBefore(canvas, dom.svSelector);
             updateCanvasSize();
-            renderSVPicker(); // 初始渲染
+            renderSVPicker();
         }
 
-        // 更新Canvas尺寸（仅在resize时调用）
         function updateCanvasSize() {
             const canvas = svCanvasCtx.canvas;
             const rect = dom.svPicker.getBoundingClientRect();
-            // 仅当尺寸实际变化时更新，避免不必要的重绘
             if (canvas.width !== rect.width || canvas.height !== rect.height) {
                 canvas.width = rect.width;
                 canvas.height = rect.height;
-                return true; // 尺寸已改变，需要重绘
+                return true;
             }
             return false;
         }
 
-        // 使用CSS水平渐变模拟饱和度，Canvas垂直渐变模拟亮度，性能远优于逐像素绘制。
         function renderSVPicker() {
-            const width = dom.svPicker.clientWidth;
-            const height = dom.svPicker.clientHeight;
-            const ctx = svCanvasCtx;
-
-            // 清除画布
+            const width = dom.svPicker.clientWidth, height = dom.svPicker.clientHeight, ctx = svCanvasCtx;
             ctx.clearRect(0, 0, width, height);
-
-            // 创建饱和度的水平渐变（从白色到纯色）
             const hueColor = `hsl(${currentColor.h}, 100%, 50%)`;
             const saturationGradient = ctx.createLinearGradient(0, 0, width, 0);
             saturationGradient.addColorStop(0, '#FFFFFF');
             saturationGradient.addColorStop(1, hueColor);
-
-            // 创建亮度的垂直渐变（从透明到黑色），叠加在上面
             const brightnessGradient = ctx.createLinearGradient(0, 0, 0, height);
             brightnessGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
             brightnessGradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
-
-            // 先填充饱和度渐变
             ctx.fillStyle = saturationGradient;
             ctx.fillRect(0, 0, width, height);
-
-            // 再叠加亮度渐变
             ctx.fillStyle = brightnessGradient;
             ctx.fillRect(0, 0, width, height);
-
-            // 更新选择器位置
             positionSVSelector();
         }
 
-        // 初始化预设颜色 - 使用事件委托提高效率
         function initPresetColors() {
-            const fragment = document.createDocumentFragment(); // 使用文档片段减少回流
+            const fragment = document.createDocumentFragment();
             presetColors.forEach(color => {
                 const colorElement = document.createElement('div');
                 colorElement.className = 'preset-color';
@@ -198,319 +161,349 @@
                 fragment.appendChild(colorElement);
             });
             dom.presetGrid.appendChild(fragment);
-
-            // 单个事件监听器处理所有预设颜色点击（事件委托）
-            dom.presetGrid.addEventListener('click', function (e) {
+            dom.presetGrid.addEventListener('click', e => {
                 if (e.target.classList.contains('preset-color')) {
-                    // 移除之前激活的颜色
-                    const active = this.querySelector('.preset-color.active');
-                    if (active) active.classList.remove('active');
-                    // 激活当前点击的颜色
+                    dom.presetGrid.querySelector('.active')?.classList.remove('active');
                     e.target.classList.add('active');
-                    // 设置颜色
                     setColorFromHex(e.target.dataset.color);
                 }
             });
         }
 
-        // 绑定事件
         function bindEvents() {
-            // 按钮事件
             dom.applyBtn.addEventListener('click', applyColor);
             dom.resetBtn.addEventListener('click', resetColor);
             dom.copyBtn.addEventListener('click', copyColor);
-
-            // 输入框事件（使用input和change组合，兼顾响应性与最终验证）
-            dom.hexInput.addEventListener('change', handleHexInput); // 更推荐在失去焦点或回车时验证
             dom.hexInput.addEventListener('blur', handleHexInput);
-            dom.rgbInput.addEventListener('change', handleRgbInput);
-            dom.hslInput.addEventListener('change', handleHslInput);
-
-            // 鼠标/触摸拖动事件
-            dom.svPicker.addEventListener('mousedown', (e) => startDrag(e, 'sv'));
-            dom.hueSlider.addEventListener('mousedown', (e) => startDrag(e, 'hue'));
-
-            // 触摸事件
-            dom.svPicker.addEventListener('touchstart', (e) => startDrag(e, 'sv'), { passive: false });
-            dom.hueSlider.addEventListener('touchstart', (e) => startDrag(e, 'hue'), { passive: false });
-
-            // 窗口resize事件
+            dom.rgbInput.addEventListener('blur', handleRgbInput);
+            dom.hslInput.addEventListener('blur', handleHslInput);
+            dom.cmykInput.addEventListener('blur', handleCmykInput);
+            dom.labInput.addEventListener('blur', handleLabInput);
+            dom.svPicker.addEventListener('mousedown', e => startDrag(e, 'sv'));
+            dom.hueSlider.addEventListener('mousedown', e => startDrag(e, 'hue'));
+            dom.svPicker.addEventListener('touchstart', e => startDrag(e, 'sv'), { passive: false });
+            dom.hueSlider.addEventListener('touchstart', e => startDrag(e, 'hue'), { passive: false });
             let resizeTimeout;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    if (updateCanvasSize()) { // 尺寸变了才重绘
-                        renderSVPicker();
-                    }
-                    positionHueHandle(); // 色相滑块位置可能需要更新
+                    if (updateCanvasSize()) renderSVPicker();
+                    positionHueHandle();
                 }, 150);
             });
         }
 
-        // 开始拖动（统一处理鼠标和触摸）
         function startDrag(e, type) {
             e.preventDefault();
             isDragging = true;
             dragType = type;
-            const isTouch = e.type.includes('touch');
-            // 立即更新一次位置
-            handleDrag(isTouch ? e.touches[0] : e);
-
-            // 绑定全局事件
-            const moveEvent = isTouch ? 'touchmove' : 'mousemove';
-            const endEvent = isTouch ? 'touchend' : 'mouseup';
-
-            const moveHandler = (e) => {
-                if (!isDragging) return;
-                handleDrag(isTouch ? e.touches[0] : e);
-            };
-
+            handleDrag(e.type.includes('touch') ? e.touches[0] : e);
+            const moveEvent = e.type.includes('touch') ? 'touchmove' : 'mousemove';
+            const endEvent = e.type.includes('touch') ? 'touchend' : 'mouseup';
+            const moveHandler = e => isDragging && handleDrag(e.type.includes('touch') ? e.touches[0] : e);
             const endHandler = () => {
                 isDragging = false;
                 dragType = null;
                 document.removeEventListener(moveEvent, moveHandler);
                 document.removeEventListener(endEvent, endHandler);
             };
-
             document.addEventListener(moveEvent, moveHandler);
             document.addEventListener(endEvent, endHandler);
         }
 
-        // 处理拖动
         function handleDrag({ clientX, clientY }) {
             if (dragType === 'hue') {
                 const rect = dom.hueSlider.getBoundingClientRect();
-                let x = clientX - rect.left;
-                x = Math.max(0, Math.min(rect.width, x));
-                const h = (x / rect.width) * 360;
-                updateColor({ h });
+                let x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+                currentColor.h = (x / rect.width) * 360;
                 dom.hueHandle.style.left = `${x}px`;
+                renderSVPicker();
             } else if (dragType === 'sv') {
                 const rect = dom.svPicker.getBoundingClientRect();
-                let x = clientX - rect.left;
-                let y = clientY - rect.top;
-                x = Math.max(0, Math.min(rect.width, x));
-                y = Math.max(0, Math.min(rect.height, y));
-                const s = (x / rect.width) * 100;
-                const v = 100 - (y / rect.height) * 100; // Y轴从上到下，亮度降低
-                updateColor({ s, v });
+                let x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+                let y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+                currentColor.s = (x / rect.width) * 100;
+                currentColor.v = 100 - (y / rect.height) * 100;
                 dom.svSelector.style.left = `${x}px`;
                 dom.svSelector.style.top = `${y}px`;
             }
-            // 注意：更新颜色后，SV选择器的背景需要根据新的色相重新渲染
-            if (dragType === 'hue') {
-                renderSVPicker(); // 色相变化需要重绘Canvas
-            }
-            // 颜色显示和输入框在 updateUIFromColor 中更新
+            updateColor();
         }
 
-        // 核心：更新颜色状态并刷新UI
-        function updateColor(newValues) {
-            // 合并新值到当前颜色
-            Object.assign(currentColor, newValues);
-            // 从HSV派生其他格式
+        function updateColor() {
             const rgb = hsvToRgb(currentColor.h, currentColor.s, currentColor.v);
             currentColor.rgb = rgb;
             currentColor.hex = rgbToHex(rgb.r, rgb.g, rgb.b);
             currentColor.hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-            // 更新UI
+            currentColor.cmyk = rgbToCmyk(rgb.r, rgb.g, rgb.b);
+            currentColor.lab = rgbToLab(rgb.r, rgb.g, rgb.b);
             updateUIFromColor();
         }
 
-        // 从十六进制颜色设置
         function setColorFromHex(hex) {
             const rgb = hexToRgb(hex);
             const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-            updateColor({ ...hsv, hex: hex.startsWith('#') ? hex : `#${hex}` });
-            // 需要更新选择器位置和Canvas
+            Object.assign(currentColor, hsv, { hex: hex.startsWith('#') ? hex : `#${hex}` });
+            updateColor();
             positionHueHandle();
             positionSVSelector();
-            renderSVPicker(); // 因为色相可能变了
+            renderSVPicker();
         }
 
-        // 更新所有UI元素以反映当前颜色
         function updateUIFromColor() {
-            // 颜色显示块
             dom.colorResult.style.backgroundColor = currentColor.hex;
-            // 输入框：显示时舍入，但内部存储浮点数
             dom.hexInput.value = currentColor.hex.toUpperCase();
             dom.rgbInput.value = `rgb(${Math.round(currentColor.rgb.r)}, ${Math.round(currentColor.rgb.g)}, ${Math.round(currentColor.rgb.b)})`;
             dom.hslInput.value = `hsl(${Math.round(currentColor.hsl.h)}, ${Math.round(currentColor.hsl.s)}%, ${Math.round(currentColor.hsl.l)}%)`;
+            dom.cmykInput.value = `cmyk(${Math.round(currentColor.cmyk.c*100)}%, ${Math.round(currentColor.cmyk.m*100)}%, ${Math.round(currentColor.cmyk.y*100)}%, ${Math.round(currentColor.cmyk.k*100)}%)`;
+            dom.labInput.value = `lab(${Math.round(currentColor.lab.l)}, ${Math.round(currentColor.lab.a)}, ${Math.round(currentColor.lab.b)})`;
         }
 
-        // 定位SV选择器
         function positionSVSelector() {
             const rect = dom.svPicker.getBoundingClientRect();
             const x = (currentColor.s / 100) * rect.width;
-            const y = (1 - currentColor.v / 100) * rect.height; // 注意Y轴反转
+            const y = (1 - currentColor.v / 100) * rect.height;
             dom.svSelector.style.left = `${x}px`;
             dom.svSelector.style.top = `${y}px`;
         }
 
-        // 定位色相滑块
         function positionHueHandle() {
             const rect = dom.hueSlider.getBoundingClientRect();
             const x = (currentColor.h / 360) * rect.width;
             dom.hueHandle.style.left = `${x}px`;
         }
 
-        // HSV -> RGB
         function hsvToRgb(h, s, v) {
-            h = h % 360;
-            s /= 100;
-            v /= 100;
-            const c = v * s;
-            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-            const m = v - c;
+            h %= 360; s /= 100; v /= 100;
+            const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c;
             let r, g, b;
-            if (h >= 0 && h < 60) [r, g, b] = [c, x, 0];
+            if (h < 60) [r, g, b] = [c, x, 0];
             else if (h < 120) [r, g, b] = [x, c, 0];
             else if (h < 180) [r, g, b] = [0, c, x];
             else if (h < 240) [r, g, b] = [0, x, c];
             else if (h < 300) [r, g, b] = [x, 0, c];
             else [r, g, b] = [c, 0, x];
-            return {
-                r: Math.round((r + m) * 255),
-                g: Math.round((g + m) * 255),
-                b: Math.round((b + m) * 255)
-            };
+            return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) };
         }
 
-        // RGB -> HSV
         function rgbToHsv(r, g, b) {
             r /= 255; g /= 255; b /= 255;
-            const max = Math.max(r, g, b), min = Math.min(r, g, b);
-            const d = max - min;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
             let h = 0;
-            const s = max === 0 ? 0 : d / max;
-            const v = max;
+            const s = max === 0 ? 0 : d / max, v = max;
             if (d !== 0) {
                 if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
                 else if (max === g) h = (b - r) / d + 2;
                 else h = (r - g) / d + 4;
                 h *= 60;
             }
-            return { h: h, s: s * 100, v: v * 100 };
+            return { h, s: s * 100, v: v * 100 };
         }
 
-        // RGB -> HSL
         function rgbToHsl(r, g, b) {
             r /= 255; g /= 255; b /= 255;
-            const max = Math.max(r, g, b), min = Math.min(r, g, b);
-            const d = max - min;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
             let h = 0;
-            const l = (max + min) / 2;
-            const s = l === 0 || l === 1 ? 0 : d / (1 - Math.abs(2 * l - 1));
+            const l = (max + min) / 2, s = l === 0 || l === 1 ? 0 : d / (1 - Math.abs(2 * l - 1));
             if (d !== 0) {
                 if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
                 else if (max === g) h = (b - r) / d + 2;
                 else h = (r - g) / d + 4;
                 h *= 60;
             }
-            return { h: h, s: s * 100, l: l * 100 };
+            return { h, s: s * 100, l: l * 100 };
         }
 
-        // RGB -> Hex
         function rgbToHex(r, g, b) {
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
         }
 
-        // Hex -> RGB
         function hexToRgb(hex) {
             hex = hex.replace('#', '');
             if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
-            const r = parseInt(hex.substring(0, 2), 16);
-            const g = parseInt(hex.substring(2, 4), 16);
-            const b = parseInt(hex.substring(4, 6), 16);
-            return { r, g, b };
+            return { r: parseInt(hex.substring(0, 2), 16), g: parseInt(hex.substring(2, 4), 16), b: parseInt(hex.substring(4, 6), 16) };
         }
 
-        // HSL -> RGB
         function hslToRgb(h, s, l) {
             h /= 360; s /= 100; l /= 100;
             const hue2rgb = (p, q, t) => {
-                if (t < 0) t += 1;
-                if (t > 1) t -= 1;
-                if (t < 1 / 6) return p + (q - p) * 6 * t;
-                if (t < 1 / 2) return q;
-                if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                if (t < 0) t += 1; if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q - p) * 6 * t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
                 return p;
             };
             let r, g, b;
-            if (s === 0) {
-                r = g = b = l;
-            } else {
-                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-                const p = 2 * l - q;
-                r = hue2rgb(p, q, h + 1 / 3);
+            if (s === 0) r = g = b = l;
+            else {
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
                 g = hue2rgb(p, q, h);
-                b = hue2rgb(p, q, h - 1 / 3);
+                b = hue2rgb(p, q, h - 1/3);
             }
             return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
         }
 
-        // 输入处理函数
         function handleHexInput() {
             let hex = dom.hexInput.value.trim();
             if (!hex) return;
             if (hex[0] !== '#') hex = '#' + hex;
-            const hexRegex = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
-            if (hexRegex.test(hex)) {
-                setColorFromHex(hex);
-            } else {
-                // 输入无效，恢复为当前值
-                dom.hexInput.value = currentColor.hex.toUpperCase();
-            }
+            if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/.test(hex)) setColorFromHex(hex);
+            else dom.hexInput.value = currentColor.hex.toUpperCase();
         }
 
         function handleRgbInput() {
-            const text = dom.rgbInput.value.trim();
-            const match = text.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+            const match = dom.rgbInput.value.trim().match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
             if (match) {
                 const r = parseInt(match[1]), g = parseInt(match[2]), b = parseInt(match[3]);
                 if (r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255) {
                     const hsv = rgbToHsv(r, g, b);
-                    updateColor({ ...hsv, rgb: { r, g, b } });
+                    Object.assign(currentColor, hsv, { rgb: { r, g, b } });
+                    updateColor();
                     positionHueHandle();
                     positionSVSelector();
                     renderSVPicker();
                     return;
                 }
             }
-            // 输入无效，恢复
             dom.rgbInput.value = `rgb(${currentColor.rgb.r}, ${currentColor.rgb.g}, ${currentColor.rgb.b})`;
         }
 
         function handleHslInput() {
-            const text = dom.hslInput.value.trim();
-            const match = text.match(/^hsl\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*\)$/i);
+            const match = dom.hslInput.value.trim().match(/^hsl\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*\)$/i);
             if (match) {
                 const h = parseInt(match[1]), s = parseInt(match[2]), l = parseInt(match[3]);
                 if (h >= 0 && h <= 360 && s >= 0 && s <= 100 && l >= 0 && l <= 100) {
                     const rgb = hslToRgb(h, s, l);
                     const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-                    updateColor({ ...hsv, hsl: { h, s, l } });
+                    Object.assign(currentColor, hsv, { hsl: { h, s, l } });
+                    updateColor();
                     positionHueHandle();
                     positionSVSelector();
                     renderSVPicker();
                     return;
                 }
             }
-            // 输入无效，恢复
             dom.hslInput.value = `hsl(${currentColor.hsl.h}, ${currentColor.hsl.s}%, ${currentColor.hsl.l}%)`;
         }
 
-        // 按钮动作
+        function handleCmykInput() {
+            const match = dom.cmykInput.value.trim().match(/^cmyk\(\s*([\d\.]+)%?\s*,\s*([\d\.]+)%?\s*,\s*([\d\.]+)%?\s*,\s*([\d\.]+)%?\s*\)$/i);
+            if (match) {
+                let c = parseFloat(match[1]), m = parseFloat(match[2]), y = parseFloat(match[3]), k = parseFloat(match[4]);
+                // handle percentage inputs
+                if (c > 1) c /= 100;
+                if (m > 1) m /= 100;
+                if (y > 1) y /= 100;
+                if (k > 1) k /= 100;
+                if ([c, m, y, k].every(v => v >= 0 && v <= 1)) {
+                    const rgb = cmykToRgb(c, m, y, k);
+                    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                    Object.assign(currentColor, hsv, { rgb, hsl });
+                    updateColor();
+                    positionHueHandle();
+                    positionSVSelector();
+                    renderSVPicker();
+                    return;
+                }
+            }
+            dom.cmykInput.value = `cmyk(${Math.round(currentColor.cmyk.c*100)}%, ${Math.round(currentColor.cmyk.m*100)}%, ${Math.round(currentColor.cmyk.y*100)}%, ${Math.round(currentColor.cmyk.k*100)}%)`;
+        }
+
+        function handleLabInput() {
+            const match = dom.labInput.value.trim().match(/^lab\(\s*([\d\.]+)\s*,\s*([\-\d\.]+)\s*,\s*([\-\d\.]+)\s*\)$/i);
+            if (match) {
+                const l = parseFloat(match[1]), a = parseFloat(match[2]), b = parseFloat(match[3]);
+                // Acceptable ranges: L 0-100, a/b roughly -128 to 127
+                if (l >= 0 && l <= 100) {
+                    const rgb = labToRgb(l, a, b);
+                    const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                    Object.assign(currentColor, hsv, { rgb, hsl });
+                    updateColor();
+                    positionHueHandle();
+                    positionSVSelector();
+                    renderSVPicker();
+                    return;
+                }
+            }
+            dom.labInput.value = `lab(${Math.round(currentColor.lab.l)}, ${Math.round(currentColor.lab.a)}, ${Math.round(currentColor.lab.b)})`;
+        }
+
+        function rgbToCmyk(r, g, b) {
+            r /= 255; g /= 255; b /= 255;
+            const k = 1 - Math.max(r, g, b);
+            if (k === 1) return { c: 0, m: 0, y: 0, k: 1 };
+            const c = (1 - r - k) / (1 - k);
+            const m = (1 - g - k) / (1 - k);
+            const y = (1 - b - k) / (1 - k);
+            return { c, m, y, k };
+        }
+
+        function cmykToRgb(c, m, y, k) {
+            const r = (1 - c) * (1 - k);
+            const g = (1 - m) * (1 - k);
+            const b = (1 - y) * (1 - k);
+            return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+        }
+
+        function rgbToLab(r, g, b) {
+            // convert rgb 0..255 to lab
+            let var_R = r / 255;
+            let var_G = g / 255;
+            let var_B = b / 255;
+            var_R = var_R > 0.04045 ? Math.pow((var_R + 0.055) / 1.055, 2.4) : var_R / 12.92;
+            var_G = var_G > 0.04045 ? Math.pow((var_G + 0.055) / 1.055, 2.4) : var_G / 12.92;
+            var_B = var_B > 0.04045 ? Math.pow((var_B + 0.055) / 1.055, 2.4) : var_B / 12.92;
+            var_R *= 100; var_G *= 100; var_B *= 100;
+            let X = var_R * 0.4124 + var_G * 0.3576 + var_B * 0.1805;
+            let Y = var_R * 0.2126 + var_G * 0.7152 + var_B * 0.0722;
+            let Z = var_R * 0.0193 + var_G * 0.1192 + var_B * 0.9505;
+            const ref_X = 95.047, ref_Y = 100.0, ref_Z = 108.883;
+            X /= ref_X; Y /= ref_Y; Z /= ref_Z;
+            X = X > 0.008856 ? Math.pow(X, 1/3) : (7.787 * X) + 16/116;
+            Y = Y > 0.008856 ? Math.pow(Y, 1/3) : (7.787 * Y) + 16/116;
+            Z = Z > 0.008856 ? Math.pow(Z, 1/3) : (7.787 * Z) + 16/116;
+            const L = (116 * Y) - 16;
+            const a = 500 * (X - Y);
+            const bb = 200 * (Y - Z);
+            return { l: L, a: a, b: bb };
+        }
+
+        function labToRgb(L, a, b) {
+            let y = (L + 16) / 116;
+            let x = a / 500 + y;
+            let z = y - b / 200;
+            const ref_X = 95.047, ref_Y = 100.0, ref_Z = 108.883;
+            let x3 = Math.pow(x, 3);
+            let y3 = Math.pow(y, 3);
+            let z3 = Math.pow(z, 3);
+            x = x3 > 0.008856 ? x3 : (x - 16 / 116) / 7.787;
+            y = y3 > 0.008856 ? y3 : (y - 16 / 116) / 7.787;
+            z = z3 > 0.008856 ? z3 : (z - 16 / 116) / 7.787;
+            x *= ref_X; y *= ref_Y; z *= ref_Z;
+            x /= 100; y /= 100; z /= 100;
+            let var_R = x * 3.2406 + y * -1.5372 + z * -0.4986;
+            let var_G = x * -0.9689 + y * 1.8758 + z * 0.0415;
+            let var_B = x * 0.0557 + y * -0.2040 + z * 1.0570;
+            var_R = var_R > 0.0031308 ? 1.055 * Math.pow(var_R, 1 / 2.4) - 0.055 : 12.92 * var_R;
+            var_G = var_G > 0.0031308 ? 1.055 * Math.pow(var_G, 1 / 2.4) - 0.055 : 12.92 * var_G;
+            var_B = var_B > 0.0031308 ? 1.055 * Math.pow(var_B, 1 / 2.4) - 0.055 : 12.92 * var_B;
+            return {
+                r: Math.round(Math.min(Math.max(0, var_R * 255), 255)),
+                g: Math.round(Math.min(Math.max(0, var_G * 255), 255)),
+                b: Math.round(Math.min(Math.max(0, var_B * 255), 255))
+            };
+        }
+
         function applyColor() {
-            alert(`已应用颜色: ${currentColor.hex}\nRGB: rgb(${currentColor.rgb.r}, ${currentColor.rgb.g}, ${currentColor.rgb.b})\nHSL: hsl(${currentColor.hsl.h}, ${currentColor.hsl.s}%, ${currentColor.hsl.l}%)`);
             console.log("当前颜色信息:", currentColor);
         }
 
         function resetColor() {
             setColorFromHex("#6c63ff");
-            // 预设颜色的激活状态已通过事件委托在点击时处理，重置时不需要遍历移除
-            const active = dom.presetGrid.querySelector('.preset-color.active');
-            if (active) active.classList.remove('active');
+            dom.presetGrid.querySelector('.active')?.classList.remove('active');
         }
 
         async function copyColor() {
@@ -523,19 +516,14 @@
                     dom.copyBtn.innerHTML = originalHTML;
                     dom.copyBtn.style.backgroundColor = "";
                 }, 1500);
-            } catch (err) {
-                console.error('复制失败:', err);
+            } catch {
                 const textArea = document.createElement('textarea');
                 textArea.value = currentColor.hex;
                 document.body.appendChild(textArea);
                 textArea.select();
-                try {
-                    document.execCommand('copy');
-                    alert('颜色值已复制到剪贴板！');
-                } catch (e) {
-                    alert('复制失败，请手动复制：' + currentColor.hex);
-                }
+                document.execCommand('copy');
                 document.body.removeChild(textArea);
+                alert('颜色值已复制到剪贴板！');
             }
         }
     </script>

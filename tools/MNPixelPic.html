@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>像素画生成器 - 图片转Lua脚本</title>
+    <title>像素画生成器</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../static/css/MNPixelPic.css">
@@ -68,12 +68,12 @@
 
                         <div class="dimension-controls">
                             <div class="form-group">
-                                <label for="width"><i class="fa-solid fa-text-width"></i> 目标宽度 (像素)</label>
+                                <label for="width"><i class="fa-solid fa-arrows-left-right-to-line"></i> 目标宽度 (像素)</label>
                                 <input type="number" id="width" v-model.number="destImgWidth" @input="inputWidth" min="1" max="500">
                             </div>
 
                             <div class="form-group">
-                                <label for="height"><i class="fa-solid fa-text-height"></i> 目标高度 (像素)</label>
+                                <label for="height"><i class="fa-solid fa-arrows-left-right-to-line" style="transform: rotate(90deg)"></i> 目标高度 (像素)</label>
                                 <input type="number" id="height" v-model.number="destImgHeight" @input="inputHeight" min="1" max="500">
                             </div>
                         </div>
@@ -257,6 +257,40 @@
                     }
                 },
 
+                // 从像素数据数组中提取坐标和颜色点
+                getPointsFromData(data, width, height) {
+                    let points = [];
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const i = (y * width + x) * 4;
+                            const r = data[i];
+                            const g = data[i + 1];
+                            const b = data[i + 2];
+                            const a = data[i + 3];
+
+                            if (a < 50) continue;
+                            if (this.removeWhite && r > 240 && g > 240 && b > 240) continue;
+
+                            const hexVal = (1 << 24) + (r << 16) + (g << 8) + b;
+                            const hexRaw = hexVal.toString(16).slice(1).toUpperCase();
+
+                            let colorStr;
+                            if (this.mode === '2.0') {
+                                colorStr = `[=[0x${hexRaw}]=]`;
+                            } else {
+                                colorStr = `0x${hexRaw}`;
+                            }
+
+                            points.push({
+                                x: x,
+                                y: height - 1 - y,
+                                c: colorStr
+                            });
+                        }
+                    }
+                    return points;
+                },
+
                 generate() {
                     if (!this.imageBase64Data) {
                         alert('请先上传图片！');
@@ -284,48 +318,10 @@
                             // 绘制图片到canvas
                             ctx.drawImage(img, 0, 0, this.destImgWidth, this.destImgHeight);
                             const imgData = ctx.getImageData(0, 0, this.destImgWidth, this.destImgHeight);
-                            const data = imgData.data;
+                            const points = this.getPointsFromData(imgData.data, this.destImgWidth, this.destImgHeight);
 
-                            let points = [];
-                            // 遍历像素
-                            for (let y = 0; y < this.destImgHeight; y++) {
-                                for (let x = 0; x < this.destImgWidth; x++) {
-                                    const i = (y * this.destImgWidth + x) * 4;
-                                    const r = data[i];
-                                    const g = data[i + 1];
-                                    const b = data[i + 2];
-                                    const a = data[i + 3];
-
-                                    // 透明度检查
-                                    if (a < 50) continue;
-
-                                    // 白背景剔除
-                                    if (this.removeWhite && r > 240 && g > 240 && b > 240) continue;
-
-                                    // 计算 Hex 整数
-                                    const hexVal = (1 << 24) + (r << 16) + (g << 8) + b;
-                                    const hexRaw = hexVal.toString(16).slice(1).toUpperCase(); // "RRGGBB"
-
-                                    // 根据模式格式化颜色字符串
-                                    let colorStr;
-                                    if (this.mode === '2.0') {
-                                        // 2.0 格式: [=[0xRRGGBB]=]
-                                        colorStr = `[=[0x${hexRaw}]=]`;
-                                    } else {
-                                        // 3.0 格式: 0xRRGGBB
-                                        colorStr = `0x${hexRaw}`;
-                                    }
-
-                                    // 坐标系：游戏通常Y向上，图片Y向下。
-                                    points.push({
-                                        x: x,
-                                        y: this.destImgHeight - 1 - y,
-                                        c: colorStr
-                                    });
-                                }
-                            }
-
-                            this.buildLua(points);
+                            const script = this.buildLua(points);
+                            this.luaScript = script;
                             this.isProcessing = false;
                         };
 
@@ -336,15 +332,16 @@
                     }, 100);
                 },
 
+                // 生成 Lua 脚本并返回字符串（不直接操作 UI）
                 buildLua(points) {
                     let lines = [];
 
                     if (this.mode === '2.0') {
-                        lines.push("-- [Script 2.0 / Global API] By PixelTool");
+                        lines.push("-- [Script 2.0 / Global API] By.KsWeb");
                         lines.push("local pixelData = {");
                     } else {
                         lines.push("local Script = {}");
-                        lines.push("-- [Script 3.0 / Class API] By PixelTool");
+                        lines.push("-- [Script 3.0 / Class API] By.KsWeb");
                         lines.push("local pixelData = {");
                     }
 
@@ -434,7 +431,7 @@
                         lines.push("return Script");
                     }
 
-                    this.luaScript = lines.join("\n");
+                    return lines.join("\n");
                 },
 
                 copy() { 
@@ -542,49 +539,10 @@
                             // 绘制图片到canvas
                             ctx.drawImage(img, 0, 0, this.destImgWidth, this.destImgHeight);
                             const imgData = ctx.getImageData(0, 0, this.destImgWidth, this.destImgHeight);
-                            const data = imgData.data;
-
-                            let points = [];
-                            // 遍历像素
-                            for (let y = 0; y < this.destImgHeight; y++) {
-                                for (let x = 0; x < this.destImgWidth; x++) {
-                                    const i = (y * this.destImgWidth + x) * 4;
-                                    const r = data[i];
-                                    const g = data[i + 1];
-                                    const b = data[i + 2];
-                                    const a = data[i + 3];
-
-                                    // 透明度检查
-                                    if (a < 50) continue;
-
-                                    // 白背景剔除
-                                    if (this.removeWhite && r > 240 && g > 240 && b > 240) continue;
-
-                                    // 计算 Hex 整数
-                                    const hexVal = (1 << 24) + (r << 16) + (g << 8) + b;
-                                    const hexRaw = hexVal.toString(16).slice(1).toUpperCase(); // "RRGGBB"
-
-                                    // 根据模式格式化颜色字符串
-                                    let colorStr;
-                                    if (this.mode === '2.0') {
-                                        // 2.0 格式: [=[0xRRGGBB]=]
-                                        colorStr = `[=[0x${hexRaw}]=]`;
-                                    } else {
-                                        // 3.0 格式: 0xRRGGBB
-                                        colorStr = `0x${hexRaw}`;
-                                    }
-
-                                    // 坐标系：游戏通常Y向上，图片Y向下。
-                                    points.push({
-                                        x: x,
-                                        y: this.destImgHeight - 1 - y,
-                                        c: colorStr
-                                    });
-                                }
-                            }
+                            const points = this.getPointsFromData(imgData.data, this.destImgWidth, this.destImgHeight);
 
                             // 生成Lua脚本
-                            const luaScript = this.buildLuaForBatch(points);
+                            const luaScript = this.buildLua(points);
                             callback(true, luaScript);
                         };
                         img.onerror = () => {
@@ -598,106 +556,7 @@
                     reader.readAsDataURL(file);
                 },
 
-                buildLuaForBatch(points) {
-                    let lines = [];
 
-                    if (this.mode === '2.0') {
-                        lines.push("-- [Script 2.0 / Global API] By PixelTool");
-                        lines.push("local pixelData = {");
-                    } else {
-                        lines.push("local Script = {}");
-                        lines.push("-- [Script 3.0 / Class API] By PixelTool");
-                        lines.push("local pixelData = {");
-                    }
-
-                    // 数据体
-                    let chunk = [];
-                    for (let i = 0; i < points.length; i++) {
-                        let p = points[i];
-                        chunk.push(`{${p.x},${p.y},${p.c}}`);
-                        if (chunk.length >= 20) {
-                            lines.push("  " + chunk.join(",") + ",");
-                            chunk = [];
-                        }
-                    }
-                    if (chunk.length > 0) lines.push("  " + chunk.join(",") + ",");
-
-                    lines.push("}");
-                    lines.push("");
-
-                    // 生成逻辑
-                    if (this.mode === '2.0') {
-                        // === 2.0 逻辑 ===
-                        lines.push("local function build(e)");
-                        lines.push("    local objId = e.eventobjid");
-                        lines.push("    local ret, x, y, z = Actor:getPosition(objId)");
-                        lines.push("    if ret ~= 0 then return end");
-                        lines.push("");
-                        lines.push("    local startX = math.floor(x) + 2");
-                        lines.push("    local startY = math.floor(y)");
-                        lines.push("    local startZ = math.floor(z)");
-                        lines.push("    local blockId = " + this.blockid);
-                        lines.push("");
-                        lines.push("    Chat:sendSystemMsg('脚本启动(2.0)，方块数: '..#pixelData)");
-                        lines.push("    local count = 0");
-                        lines.push("    local BATCH_SIZE = 300");
-                        lines.push("");
-                        lines.push("    for i, v in ipairs(pixelData) do");
-                        lines.push("        local tx = startX + v[1]");
-                        lines.push("        local ty = startY + v[2]");
-                        lines.push("        local tz = startZ");
-                        lines.push("");
-                        lines.push("        Trigger.Block:createBlock({x=tx, y=ty, z=tz}, blockId, 0, v[3])");
-                        lines.push("");
-                        lines.push("        count = count + 1");
-                        lines.push("        if count % BATCH_SIZE == 0 then");
-                        lines.push("            threadpool:wait(0.05)");
-                        lines.push("            Actor:setPosition(objId, tx, ty, tz + 2)");
-                        lines.push("        end");
-                        lines.push("    end");
-                        lines.push("    Chat:sendSystemMsg('生成结束')");
-                        lines.push("end");
-                        lines.push("");
-                        lines.push("ScriptSupportEvent:registerEvent([=[Player.UseItem]=], build)");
-                    } else {
-                        // === 3.0 逻辑 ===
-                        lines.push("function Script:OnStart()");
-                        lines.push("    self:AddTriggerEvent(TriggerEvent.PlayerUseItem, self.OnUse)");
-                        lines.push("end");
-                        lines.push("");
-                        lines.push("function Script:OnUse(e)");
-                        lines.push("    local objId = e.eventobjid");
-                        lines.push("    local x, y, z = Actor:GetPosition(objId)");
-                        lines.push("");
-                        lines.push("    local startX = math.floor(x) + 2");
-                        lines.push("    local startY = math.floor(y)");
-                        lines.push("    local startZ = math.floor(z)");
-                        lines.push("    local blockId = " + this.blockid);
-                        lines.push("");
-                        lines.push("    print('脚本启动(3.0)，方块数: '..#pixelData)");
-                        lines.push("    local count = 0");
-                        lines.push("    local BATCH_SIZE = 300");
-                        lines.push("");
-                        lines.push("    for i, v in ipairs(pixelData) do");
-                        lines.push("        local tx = startX + v[1]");
-                        lines.push("        local ty = startY + v[2]");
-                        lines.push("        local tz = startZ");
-                        lines.push("");
-                        lines.push("        Block:PlaceBlock(blockId, tx, ty, tz, 0, v[3])");
-                        lines.push("");
-                        lines.push("        count = count + 1");
-                        lines.push("        if count % BATCH_SIZE == 0 then");
-                        lines.push("            threadpool:wait(0.05)");
-                        lines.push("            Actor:SetPosition(objId, tx, ty, tz + 2)");
-                        lines.push("        end");
-                        lines.push("    end");
-                        lines.push("    print('生成结束')");
-                        lines.push("end");
-                        lines.push("return Script");
-                    }
-
-                    return lines.join("\n");
-                },
 
                 saveBatchResult(filename, luaScript) {
                     // 创建Blob对象
