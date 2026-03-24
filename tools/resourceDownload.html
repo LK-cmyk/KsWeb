@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KsWeb - 资源下载</title>
+    <link rel="stylesheet" href="../static/css/resourceDownload.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- 背景图层 -->
+    <div class="background">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h2><i class="fas fa-cube"></i> KsWeb</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="./index.html"><i class="fas fa-home"></i> 首页</a></li>
+                <li><a href="./about.html"><i class="fas fa-info-circle"></i> 关于</a></li>
+            </ul>
+        </nav>
+        
+        <!-- 资源下载主区域 -->
+        <section class="main-section">
+            <div class="section-header">
+                <h1><i class="fas fa-cloud-download-alt"></i> 资源下载</h1>
+                <p class="subtitle">浏览、预览和下载各种资源文件，包含图片、文档、工具等</p>
+            </div>
+
+            <!-- 控制栏 -->
+            <div class="controls-bar">             
+                <div class="control-group">
+                    <h3><i class="fas fa-search"></i> 搜索资源</h3>
+                    <div class="search-box-wrapper">
+                        <i class="fas fa-search search-icon"></i>
+                        <input type="text" id="searchInput" placeholder="输入资源名称或关键词...">
+                    </div>
+                    <p class="search-hint">支持按名称、描述、标签搜索</p>
+                </div>
+            </div>
+
+            <!-- 信息栏 -->
+            <div class="info-bar">
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="fas fa-folder-open"></i> 当前分类：
+                    </span>
+                    <span class="info-value highlight">{type}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">
+                        <i class="fas fa-file"></i> 资源总数：
+                    </span>
+                    <span class="info-value" id="totalCount">{num}</span>
+                </div>
+            </div>
+
+            <!-- 资源网格 -->
+            <div class="resources-grid" id="resourcesGrid">
+                <!-- 资源卡片1 -->
+                <div class="resource-card" data-category="templates">
+                    <div class="resource-preview">
+                        <div class="image-loading"></div>
+                        <img src="" alt="" class="resource-image" loading="lazy">
+                    </div>
+                    <div class="resource-info">
+                        <div class="resource-header">
+                            <h3 class="resource-title">{title}</h3>
+                            <span class="resource-category">{category}</span>
+                        </div>
+                        <p class="resource-description">{desc}</p>
+                        <div class="resource-meta">
+                            <div class="meta-item">
+                                <i class="fas fa-calendar"></i>
+                                <span>{time}</span>
+                            </div>
+                        </div>
+                        <div class="resource-footer">
+                            <span class="resource-size">{size}</span>
+                            <button class="download-btn" onclick="downloadResource('ui-template-kit.zip')">
+                                <i class="fas fa-download"></i> 下载
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 分页控件 -->
+            <div class="pagination-container">
+                <div class="pagination">
+                    <button class="page-btn" disabled>
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="page-btn active">{start}</button>
+                    <span class="page-btn" style="border: none; background: transparent;">...</span>
+                    <button class="page-btn">{end}</button>
+                    <button class="page-btn">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="page-size-info">每页显示 {resources_num} 个资源，共 {pages_num} 页</div>
+            </div>
+        </section>
+
+        <!-- 图片预览模态框 -->
+        <div id="imagePreviewModal" class="modal-overlay">
+            <div class="modal-content">
+                <button class="modal-close" onclick="closePreview()">
+                    <i class="fas fa-times"></i>
+                </button>
+                <img id="previewImage" class="modal-image" src="" alt="资源预览">
+            </div>
+        </div>
+
+        <!-- 页脚 -->
+        <footer class="footer">
+            <div class="footer-content">
+                <p><i class="fas fa-code"></i> Coding your life.</p>
+                <p class="copyright">© 2024 KsWeb. 所有资源仅供学习交流使用。</p>
+            </div>
+        </footer>
+    </main>
+
+    <script>
+        // 图片预览功能
+        function openPreview(imageUrl) {
+            const modal = document.getElementById('imagePreviewModal');
+            const previewImage = document.getElementById('previewImage');
+            previewImage.src = imageUrl;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden'; // 防止背景滚动
+        }
+
+        function closePreview() {
+            const modal = document.getElementById('imagePreviewModal');
+            modal.classList.remove('active');
+            document.body.style.overflow = 'auto'; // 恢复滚动
+        }
+
+        // 点击模态框背景关闭
+        document.getElementById('imagePreviewModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closePreview();
+            }
+        });
+
+        // 按ESC键关闭预览
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closePreview();
+            }
+        });
+
+        // 下载功能模拟
+        function downloadResource(filename) {
+            alert(`开始下载: ${filename}\n\n（此处为演示功能，实际应触发文件下载）`);
+            // 实际应用中这里应该是文件下载逻辑
+            // window.location.href = `/download/${filename}`;
+        }
+
+        // 分类筛选功能
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // 更新激活状态
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                const category = this.dataset.category;
+                const categoryDisplay = this.textContent.trim();
+                
+                // 更新信息栏
+                document.querySelector('.info-bar .highlight').textContent = categoryDisplay;
+                
+                // 筛选资源卡片
+                const resources = document.querySelectorAll('.resource-card');
+                let visibleCount = 0;
+                
+                resources.forEach(resource => {
+                    if (category === 'all' || resource.dataset.category === category) {
+                        resource.style.display = 'flex';
+                        visibleCount++;
+                    } else {
+                        resource.style.display = 'none';
+                    }
+                });
+                
+                // 更新计数
+                document.getElementById('totalCount').textContent = visibleCount;
+            });
+        });
+
+        // 搜索功能
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const resources = document.querySelectorAll('.resource-card');
+            let visibleCount = 0;
+            
+            resources.forEach(resource => {
+                const title = resource.querySelector('.resource-title').textContent.toLowerCase();
+                const description = resource.querySelector('.resource-description').textContent.toLowerCase();
+                const category = resource.querySelector('.resource-category').textContent.toLowerCase();
+                
+                if (title.includes(searchTerm) || description.includes(searchTerm) || category.includes(searchTerm)) {
+                    resource.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    resource.style.display = 'none';
+                }
+            });
+            
+            // 更新计数
+            document.getElementById('totalCount').textContent = visibleCount;
+        });
+
+        // 图片懒加载
+        const imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const img = entry.target;
+                    img.src = img.dataset.src;
+                    img.classList.add('loaded');
+                    observer.unobserve(img);
+                }
+            });
+        });
+
+        // 监听所有图片
+        document.addEventListener('DOMContentLoaded', function() {
+            const images = document.querySelectorAll('.resource-image[data-src]');
+            images.forEach(img => imageObserver.observe(img));
+        });
+
+        // 模拟图片加载完成
+        window.addEventListener('load', function() {
+            document.querySelectorAll('.image-loading').forEach(loader => {
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                }, 1000);
+            });
+        });
+    </script>
+</body>
+</html>
